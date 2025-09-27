@@ -33,44 +33,34 @@ const OrbitalDatePicker: React.FC<Props> = ({
   };
 
   useEffect(() => {
-    totalRotationRef.current = 0; 
+    totalRotationRef.current = 0;
     setVisualRotation(0);
     setYear(initialYear);
-  }, []); 
+  }, []);
 
   useEffect(() => {
     const orbit = orbitRef.current;
     const planet = planetRef.current;
     if (!orbit || !planet) return;
 
-    const handleMouseDown = (e: MouseEvent) => {
+    const getCoordinates = (clientX: number, clientY: number) => {
+      const rect = orbit.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = clientX - cx;
+      const dy = clientY - cy;
+      return { dx, dy };
+    };
+
+    const startDrag = (clientX: number, clientY: number) => {
       isDraggingRef.current = true;
-
-      const rect = orbit.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      const dx = e.clientX - cx;
-      const dy = e.clientY - cy;
-
+      const { dx, dy } = getCoordinates(clientX, clientY);
       lastAngleRef.current = Math.atan2(dy, dx);
-      e.preventDefault();
     };
 
-    const handleMouseUp = () => {
-      if (isDraggingRef.current) {
-        onYearSelect(Math.round(year));
-      }
-      isDraggingRef.current = false;
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
+    const moveDrag = (clientX: number, clientY: number) => {
       if (!isDraggingRef.current) return;
-
-      const rect = orbit.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      const dx = e.clientX - cx;
-      const dy = e.clientY - cy;
+      const { dx, dy } = getCoordinates(clientX, clientY);
       const currentAngle = Math.atan2(dy, dx);
 
       let angleDiff = currentAngle - lastAngleRef.current;
@@ -78,23 +68,53 @@ const OrbitalDatePicker: React.FC<Props> = ({
       if (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
 
       totalRotationRef.current += angleDiff;
-
       const newYear =
         initialYear + (totalRotationRef.current / (2 * Math.PI)) * 12;
+
       setYear(newYear);
       setVisualRotation(totalRotationRef.current * (180 / Math.PI));
-
       lastAngleRef.current = currentAngle;
     };
 
+    const endDrag = () => {
+      if (isDraggingRef.current) {
+        onYearSelect(Math.round(year));
+      }
+      isDraggingRef.current = false;
+    };
+
+    // Mouse events
+    const handleMouseDown = (e: MouseEvent) => startDrag(e.clientX, e.clientY);
+    const handleMouseMove = (e: MouseEvent) => moveDrag(e.clientX, e.clientY);
+    const handleMouseUp = () => endDrag();
+
+    // Touch events
+    const handleTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      startDrag(touch.clientX, touch.clientY);
+    };
+    const handleTouchMove = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      moveDrag(touch.clientX, touch.clientY);
+    };
+    const handleTouchEnd = () => endDrag();
+
     planet.addEventListener("mousedown", handleMouseDown);
-    window.addEventListener("mouseup", handleMouseUp);
     window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    planet.addEventListener("touchstart", handleTouchStart);
+    window.addEventListener("touchmove", handleTouchMove);
+    window.addEventListener("touchend", handleTouchEnd);
 
     return () => {
       planet.removeEventListener("mousedown", handleMouseDown);
-      window.removeEventListener("mouseup", handleMouseUp);
       window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+
+      planet.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
     };
   }, [initialYear, year, onYearSelect]);
 
